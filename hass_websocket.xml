@@ -1,0 +1,1079 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="Websocket" alias="Home Assistant"
+  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.0">
+
+  <notes>
+    Must set address on the wire to the host ip address
+    hass ip address and token need to be set in the state variables section
+  </notes>
+  <component_properties>
+    <listen_for_third_party_service_requests>true</listen_for_third_party_service_requests>
+    <!--_run_once_-->
+  </component_properties>
+  <control_interfaces preferred="ip">
+    <ip port="8123" response_time_length_ms="1000" protocol="udp" local_port="8123">
+      <!--_run_once_-->
+      <!--_run_after_<ip port="8123" response_time_length_ms="10000" protocol="tcp">-->
+      <!--_run_after_<send_postfix type="hex">0A</send_postfix>-->
+      <receive_end_condition test_condition="data" type="hex">0A</receive_end_condition>
+    </ip>
+  </control_interfaces>
+  <media_interfaces>
+    <data name_on_component="Ethernet">
+      <combined_media>
+        <data_media type="ethernet"/>
+        <control port="8123"/>
+      </combined_media>
+    </data>
+
+
+    <internal name_on_component="Lighting Controller">
+      <environmental_media/>
+      <resource resource_type="ENV_LIGHTINGCONTROLLER_SOURCE"/>
+      <resource resource_type="ENV_FANCONTROLLER_SOURCE"/>
+    </internal>
+    <internal name_on_component="DoorLockController">
+      <environmental_media/>
+      <resource resource_type="ENV_DOOR_LOCK_SOURCE"/>
+    </internal>
+    <internal name_on_component="GarageDoorController">
+      <environmental_media/>
+      <resource resource_type="ENV_GARAGE_DOOR_SOURCE"/>
+    </internal>
+  </media_interfaces>
+  <state_variable_list>
+    <state_variable name="auth_token" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Long Lived User Access Token"/>
+    <state_variable name="server_fqdn" owning_logical_component="Home Assistant" state_center_type="string"/>
+    <state_variable name="server_address" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server Address"/>
+    <state_variable name="server_port" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server API Port">8123</state_variable>
+
+    <dynamic_state_variable name="DoorLockStatus" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="DoorLockStatus"/>
+    <dynamic_state_variable name="IsDoorLocked" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="IsDoorLocked"/>
+    <dynamic_state_variable name="GarageDoorStatus" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="GarageDoorStatus"/>
+    <dynamic_state_variable name="DimmerLevel" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="DimmerLevel" min_value="0" max_value="255"/>
+
+    <state_variable name="FanSet_0" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Off">0</state_variable>
+    <state_variable name="FanSet_1" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Low">2</state_variable>
+    <state_variable name="FanSet_2" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Mid">4</state_variable>
+    <state_variable name="FanSet_3" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed High">7</state_variable>
+
+
+    <state_variable name="coprocessor_connected" owning_logical_component="Shade Controller" state_center_binding="coprocessor_connected" state_center_type="integer">0</state_variable>
+    <state_variable name="profile_name" owning_logical_component="CoProcessor" state_center_binding="profile_name" state_center_type="string">hass_websocket</state_variable>
+    <state_variable name="prefix" owning_logical_component="CoProcessor" state_center_binding="prefix" state_center_type="string">---1-SVC_GEN_GENERIC-RunCLIProgram:COMMAND_STRING=</state_variable>
+  </state_variable_list>
+  <logical_component logical_component_name="Home Assistant">
+    <implementation>
+      <internal name_on_component="Lighting Controller"/>
+    </implementation>
+
+    <status_messages>
+      <status_message name="DoorLockStatusMessage">
+        <!--
+                    Example message.
+                    {"entity_id": "lock.garage_door", "state": "locked", "attributes": {"battery_level": 90, "friendly_name": "Garage Door"}, "last_changed": "2021-09-29T22:14:10.122864+00:00", "last_updated": "2021-09-29T22:14:10.122864+00:00", "context": {"id": "9a47194a56f53617d3def34584cd92f8", "parent_id": null, "user_id": null}}
+                -->
+        <root_object name="none" matches_required="all" format="json">
+          <values path="//entity_id" matches_required="at_least_one">
+            <update state="EntityID" type="string"/>
+          </values>
+          <values path="//state" matches_required="at_least_one">
+            <value_map match_required="yes">
+              <map key="locked">
+                <update state="DoorLockStatus" type="string">Locked</update>
+                <update state="IsDoorLocked" type="boolean">true</update>
+              </map>
+              <map key="unlocked">
+                <update state="DoorLockStatus" type="string">Unlocked</update>
+                <update state="IsDoorLocked" type="boolean">false</update>
+              </map>
+            </value_map>
+          </values>
+        </root_object>
+        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      </status_message>
+
+      <status_message name="GarageDoorStatusMessage">
+        <!--
+                    Example message.
+                    {"entity_id": "lock.garage_door", "state": "locked", "attributes": {"battery_level": 90, "friendly_name": "Garage Door"}, "last_changed": "2021-09-29T22:14:10.122864+00:00", "last_updated": "2021-09-29T22:14:10.122864+00:00", "context": {"id": "9a47194a56f53617d3def34584cd92f8", "parent_id": null, "user_id": null}}
+                -->
+        <root_object name="none" matches_required="all" format="json">
+          <values path="//entity_id" matches_required="at_least_one">
+            <update state="EntityID" type="string"/>
+          </values>
+          <values path="//state" matches_required="at_least_one">
+            <value_map match_required="yes">
+              <map key="closed">
+                <update state="GarageDoorStatus" type="string">Closed</update>
+              </map>
+              <map key="open">
+                <update state="GarageDoorStatus" type="string">Open</update>
+              </map>
+            </value_map>
+          </values>
+        </root_object>
+        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      </status_message>
+
+      <status_message name="LightStatusMessage">
+        <!--
+                    Example message.
+                    {"entity_id": "light.master_bedroom_main_lights", "state": "on", "attributes": {"supported_color_modes": ["brightness"], "color_mode": "brightness", "brightness": 53, "device_id": "3", "zone_id": "1", "friendly_name": "Master Bedroom_Main Lights", "supported_features": 33}, "last_changed": "2021-09-30T06:02:36.862424+00:00", "last_updated": "2021-09-30T06:02:50.412270+00:00", "context": {"id": "9b2376792d947a907e9969ccf35b71b8", "parent_id": null, "user_id": "ceee07c379604714b7d725ef957f81fd"}}
+                -->
+        <root_object name="none" matches_required="all" format="json">
+          <values path="//entity_id" matches_required="at_least_one">
+            <update state="EntityID" type="string"/>
+          </values>
+          <values path="//state" matches_required="at_least_one">
+            <value_map match_required="yes">
+              <map key="on">
+                <!-- 0-255 scale -->
+                <update state="DimmerLevel" type="integer"/>
+                <update state="IsDimmerOn" type="boolean">true</update>
+                <update state="LightPowerStatus" type="string">ON</update>
+                <update state="isLightOn" type="boolean">true</update>
+              </map>
+              <map key="off">
+                <update state="DimmerLevel" type="integer"/>
+                <update state="IsDimmerOn" type="boolean">false</update>
+                <update state="LightPowerStatus" type="string">OFF</update>
+                <update state="isLightOn" type="boolean">false</update>
+              </map>
+            </value_map>
+          </values>
+        </root_object>
+        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      </status_message>
+
+      <status_message name="FanStatusMessage">
+        <!--
+                    Example message.
+                    {"entity_id": "fan.master_bedroom_fan", "state": "on", "attributes": {"speed_list": ["off", "1", "2", "3", "4", "5", "6", "7"], "preset_modes": [], "direction": "forward", "oscillating": false, "speed": "7", "percentage": 100, "percentage_step": 14.285714285714286, "preset_mode": null, "autocomfort": "OFF", "smartmode": "OFF", "room": "Master Bedroom", "friendly_name": "Master Bedroom Fan", "supported_features": 7}, "last_changed": "2021-09-30T03:34:49.995068+00:00", "last_updated": "2021-09-30T03:34:50.010272+00:00", "context": {"id": "e7b2d16f1b722574b04f3f75f0815e31", "parent_id": null, "user_id": null}}
+                -->
+        <root_object name="none" matches_required="all" format="json">
+          <values path="//entity_id" matches_required="at_least_one">
+            <update state="EntityID" type="string"/>
+          </values>
+          <values path="//state" matches_required="at_least_one">
+            <value_map match_required="yes">
+              <map key="on">
+                <update state="GarageDoorStatus" type="string">Closed</update>
+              </map>
+              <map key="off">
+                <update state="GarageDoorStatus" type="string">Open</update>
+              </map>
+            </value_map>
+          </values>
+        </root_object>
+        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      </status_message>
+    </status_messages>
+
+    <resource_component_actions resource_type="ENV_FANCONTROLLER_SOURCE">
+      <action name="FanSet">
+        <action_argument name="Address1" note="Entity ID"/>
+        <action_argument name="Address2" note="not used"/>
+        <action_argument name="Address3" note="not used"/>
+        <action_argument name="Address4" note="not used"/>
+        <action_argument name="Address5" note="not used"/>
+        <action_argument name="Address6" note="not used"/>
+        <action_argument name="FanSpeed" note="Fan Speed 0 - 3"/>
+        <command_interface interface="ip">
+          <!-- Can sequence multiple commands, maybe to turn it off when FanSpeed is 0? -->
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">&quot;, &quot;speed&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" state_variable="FanSet_*" wildcard_source="action_argument" wildcard_source_name="FanSpeed"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/fan/turn_on</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <entity name="Fan" address_components="2">
+        <slider_representation>
+          <press_action name="FanSet"/>
+          <valueSource name="CurrentDimmerLevel">
+            <unique_identifier name="Needed" address_component="2"/>
+            <unique_identifier name="DeviceID" address_component="1"/>
+          </valueSource>
+        </slider_representation>
+        <query_status_with_action name="QueryFanState" period_ms="30000">
+          <with_arg name="Address1" address_component="1" format="%s"/>
+        </query_status_with_action>
+      </entity>
+    </resource_component_actions>
+
+    <resource_component_actions resource_type="ENV_LIGHTINGCONTROLLER_SOURCE">
+      <action name="SwitchOn">
+        <action_argument name="Address1" note="Entity ID"/>
+        <action_argument name="Address2" note=""/>
+        <action_argument name="Address3" note=""/>
+        <action_argument name="Address4" note=""/>
+        <action_argument name="Address5" note=""/>
+        <action_argument name="Address6" note=""/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="SwitchOff">
+        <action_argument name="Address1" note="Entity ID"/>
+        <action_argument name="Address2" note=""/>
+        <action_argument name="Address3" note=""/>
+        <action_argument name="Address4" note=""/>
+        <action_argument name="Address5" note=""/>
+        <action_argument name="Address6" note=""/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/light/turn_off</parameter>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="DimmerSet">
+        <action_argument name="Address1" note="Entity ID"/>
+        <action_argument name="Address2" note="not used"/>
+        <action_argument name="Address3" note="not used"/>
+        <action_argument name="Address4" note="not used"/>
+        <action_argument name="Address5" note="not used"/>
+        <action_argument name="Address6" note="not used"/>
+        <action_argument name="DimmerLevel" note="Select the Dimmer Level 0 - 100"/>
+        <action_argument name="DelayTime" note="not used"/>
+        <action_argument name="FadeTime" note="not used"/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">&quot;, &quot;brightness_pct&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <entity address_components="1" name="Dimmer Group">
+        <slider_representation>
+          <press_action name="DimmerSet"/>
+          <valueSource name="DimmerLevel">
+            <unique_identifier address_component="1" name="DimmerLevel"/>
+          </valueSource>
+        </slider_representation>
+        <query_status_with_action name="QueryLightState" period_ms="0">
+          <with_arg name="Address1" address_component="1" format="%s"/>
+        </query_status_with_action>
+        <query_status_with_action name="QueryLightState" period_ms="30000">
+          <with_arg name="Address1" address_component="1" format="%s"/>
+        </query_status_with_action>
+      </entity>
+
+      <entity name="Switch" address_components="1">
+        <toggle_button_representation>
+          <release_action name="SwitchOn"> </release_action>
+          <toggle_release_action name="SwitchOff"> </toggle_release_action>
+          <osd_press_action name="SwitchOn"> </osd_press_action>
+          <osd_hold_action name="SwitchOff"> </osd_hold_action>
+          <toggleOnUsingState name="isLightOn">
+            <unique_identifier name="CurrentLightNumber" address_component="1"/>
+          </toggleOnUsingState>
+        </toggle_button_representation>
+        <!-- Query state immediately -->
+        <query_status_with_action name="QueryLightState" period_ms="0">
+          <with_arg name="Address1" address_component="1" format="%s"/>
+        </query_status_with_action>
+        <query_status_with_action name="QueryLightState" period_ms="30000">
+          <with_arg name="Address1" address_component="1" format="%s"/>
+        </query_status_with_action>
+      </entity>
+    </resource_component_actions>
+
+    <resource_component_actions resource_type="ENV_DOOR_LOCK_SOURCE">
+      <action name="LockDoorLock">
+        <action_argument name="DoorLockAddress" note="Entity ID"/>
+        <update_state_variable name="DoorLockStatus_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="DoorLockAddress">Locked</update_state_variable>
+        <update_state_variable name="IsDoorLocked_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="DoorLockAddress">true</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/lock/lock</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="UnlockDoorLock">
+        <action_argument name="DoorLockAddress" note="Entity ID"/>
+        <update_state_variable name="DoorLockStatus_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="DoorLockAddress">Unlocked</update_state_variable>
+        <update_state_variable name="IsDoorLocked_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="DoorLockAddress">false</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/lock/unlock</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <entity name="Lock" address_components="1">
+        <toggle_button_representation>
+          <release_action name="UnlockDoorLock"/>
+          <toggle_release_action name="LockDoorLock"/>
+        </toggle_button_representation>
+        <query_status_with_action name="QueryDoorLockState" period_ms="30000">
+          <with_arg name="DoorLockAddress" address_component="1" format="%s"/>
+        </query_status_with_action>
+      </entity>
+    </resource_component_actions>
+
+    <resource_component_actions resource_type="ENV_GARAGE_DOOR_SOURCE">
+      <action name="CloseGarageDoor">
+        <action_argument name="GarageDoorAddress" note="Entity ID"/>
+        <update_state_variable name="GarageDoorStatus_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="GarageDoorAddress">Closed</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/cover/close_cover</parameter>
+            </parameter_list>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="OpenGarageDoor">
+        <action_argument name="GarageDoorAddress" note="Entity ID"/>
+        <update_state_variable name="GarageDoorStatus_*" update_type="set" update_source="constant" wildcard_format="%s" wildcard_source="action_argument" wildcard_source_name="GarageDoorAddress">Open</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl-d '</parameter>
+              <parameter parameter_data_type="character">{&quot;entity_id&quot;: &quot;</parameter>
+              <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
+              <parameter parameter_data_type="character">&quot;}</parameter>
+              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/services/cover/open_cover</parameter>
+            </parameter_list>
+          </command>
+        </command_interface>
+      </action>
+
+      <entity name="Garage Door" address_components="1">
+        <toggle_button_representation>
+          <release_action name="OpenGarageDoor"/>
+          <toggle_release_action name="CloseGarageDoor"/>
+        </toggle_button_representation>
+        <query_status_with_action name="QueryGarageDoorState" period_ms="30000">
+          <with_arg name="GarageDoorAddress" address_component="1" format="%s"/>
+        </query_status_with_action>
+      </entity>
+    </resource_component_actions>
+
+    <custom_component_actions>
+      <action name="QueryLightState">
+        <action_argument name="Address1" note="Entity ID"/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/states/</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="QueryGarageDoorState">
+        <action_argument name="GarageDoorAddress" note="Entity ID"/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/states/</parameter>
+              <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="QueryDoorLockState">
+        <action_argument name="DoorLockAddress" note="Entity ID"/>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/states/</parameter>
+              <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
+            </parameter_list>
+            <delay ms_delay="250"/>
+          </command>
+        </command_interface>
+      </action>
+
+      <action name="QueryFanState">
+        <action_argument name="Address1" note="Entity ID"/>
+        <action_argument name="Address2" note="not used"/>
+        <action_argument name="Address3" note="not used"/>
+        <action_argument name="Address4" note="not used"/>
+        <action_argument name="Address5" note="not used"/>
+        <action_argument name="Address6" note="not used"/>
+        <update_state_variable name="CurrentLightNumber" update_type="set" update_source="action_argument">Address1</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="yes">
+            <parameter_list>
+              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">/api/states/</parameter>
+              <parameter parameter_data_type="character" action_argument="Address1"/>
+            </parameter_list>
+            <response_codes>
+              <rspmessage status="success" name="HassLightOn">
+                <root_object name="none" matches_required="at_least_one" format="json">
+                  <values path="/state" matches_required="at_least_one">
+                    <value_map match_required="yes">
+                      <map key="off">
+                        <update state="LightPowerStatus" type="string">OFF</update>
+                        <update state="isLightOn" type="boolean">false</update>
+                      </map>
+                      <map key="on">
+                        <update state="LightPowerStatus" type="string">ON</update>
+                        <update state="isLightOn" type="boolean">true</update>
+                      </map>
+                    </value_map>
+                  </values>
+                </root_object>
+                <append_data_to_state_names state="CurrentLightNumber"/>
+              </rspmessage>
+            </response_codes>
+            <delay ms_delay="50"/>
+          </command>
+        </command_interface>
+      </action>
+      <action name="ConnectWebsocket">
+        <update_state_variable name="server_fqdn" update_type="set" update_source="constant">http://</update_state_variable>
+        <update_state_variable name="server_fqdn" update_type="append" update_source="state_variable">server_address</update_state_variable>
+        <update_state_variable name="server_fqdn" update_type="append" update_source="constant">:</update_state_variable>
+        <update_state_variable name="server_fqdn" update_type="append" update_source="state_variable">server_port</update_state_variable>
+        <command_interface interface="ip">
+          <command response_required="no">
+            <command_string type="character">scon</command_string>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character">,</parameter>
+              <parameter parameter_data_type="character" state_variable="auth_token"/>
+            </parameter_list>
+          </command>
+        </command_interface>
+        <!--_run_after_<execute_on_schedule period_ms="0"></execute_on_schedule>-->
+        <execute_action_after_delay ms_delay="5000" action_name="SubscribeEvents" action_type="CUSTOM" use_polling_queue="false" clear_duplicated="false"/>
+      </action>
+      <action name="SubscribeEvents">
+        <command_interface interface="ip">
+          <command response_required="no">
+            <command_string type="character">sock{"type": "subscribe_events"}</command_string>
+          </command>
+        </command_interface>
+      </action>
+    </custom_component_actions>
+  </logical_component>
+  <logical_component logical_component_name="CoProcessor">
+    <implementation/>
+    <custom_component_actions>
+
+      <action name="START">
+        <command_interface interface="ip">
+          
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character">-----</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">echo 'cd ~;grep -A9999 "#\!" '>~/s1s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">[ -d /Users ] &amp;&amp; echo '/Users/RPM/Library/Application\ Support'>~/s2s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="100"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">[ -d /Users ] || echo '/home/RPM/GNUstep/Library/ApplicationSupport'>~/s2s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">echo '/RacePointMedia/userConfig.rpmConfig/componentProfiles'>~/s3s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">echo '/$1.xml>$1;ruby $1 &amp;>>$1.log &amp;!'>~/s4s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">cat ~/s*s | tr -d '\n' > ~/rs</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">/bin/zsh ~/rs </parameter>
+              <parameter parameter_data_type="character" state_variable="profile_name"/>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="500"/>
+          </command>
+          <command response_required="no">
+            <command_string type="character"/>
+            <parameter_list>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">rm ~/s1s ~/s2s ~/s3s ~/s4s</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="10000"/>
+          </command>
+        </command_interface>
+        <execute_on_schedule period_ms="0"/>
+        <!--_run_once_-->
+        <execute_on_schedule period_ms="30000"/>
+        <!--_run_once_-->
+      </action>
+    </custom_component_actions>
+  </logical_component>
+
+</component>
+<!--[CDATA[ 
+#!/usr/bin/env ruby
+exit unless DATA.flock(File::LOCK_NB | File::LOCK_EX)
+###################################################Set Globals###########################################
+DEBUG = true
+READ_TIMEOUT = 0.5
+
+require 'socket'
+include Socket::Constants
+require 'logger'
+require 'json'
+require 'base64'
+require 'uri'
+
+def program_loop(server_port)
+  profile_server = ProfileServer.new(server_port)
+  $l.debug [profile_server,:on,server_port]
+  profile = nil
+  headers = ''
+  server = ''
+  loop do
+    hass = nil 
+    socks = profile_server.socks
+    socks << profile_server
+    loop do
+      $l.debug [:listen_on,socks]
+      ready = select(socks,nil,nil,30)
+      raise 'no connection from savant after 30 seconds. exiting' unless ready
+      ready[0].each do |r|
+        case r
+        when profile_server
+          profile_server.accept
+        when hass
+          m = JSON.parse(hass.read_data)
+          m = (m['result'] || m['event'] || m).to_json
+          $l.debug [:from_hass,m]
+          profile.puts m
+        else
+          profile = r
+          message = r.gets("\n").chomp
+          $l.debug [:from_savant,message]
+          case message[0..3]
+          when 'curl'
+            m = "curl -s #{headers} '#{message[4..-1]}'"
+            $l.debug [:sending, m]
+            r.puts `#{m}`
+            
+          when 'scon'
+            socks.delete(hass)
+            server,tokn = message[4..-1].split(',')
+            hass = Hass.new(server,tokn)
+            socks << hass
+            headers = "-H 'Content-Type: application/json' -H 'Authorization: Bearer #{tokn}'"
+          when 'sock'
+            raise 'Hass websocket not connected' unless hass
+            hass.send_data(message[4..-1])
+          end    
+        end
+      end
+    end
+  end
+rescue => e
+  $l.error [e,e.backtrace]
+  exit
+ensure
+  profile_server.close if profile_server rescue nil
+end
+
+##########################################Helper Classes#####################################
+
+class Hass < Socket
+  
+  def initialize(hass_address,token)
+  $l.debug [:connecting_to, hass_address]
+    super(AF_INET, SOCK_STREAM, 0)
+    
+    
+    @hass_address = URI(hass_address)
+    @hass_host = @hass_address.hostname
+    @hass_port = @hass_address.port
+    @hass_addr = Socket.sockaddr_in(@hass_port, @hass_host)
+    
+    @id = 0
+    @buffer = {}
+    
+    hass_connect
+    self.print(make_handshake)
+    establish_websock(token)
+    
+  end
+  
+  def send_data(data)
+    result = JSON.parse(data)
+    result['id'] = @id
+    send_text(result.to_json)
+  end
+
+  def read_data(buffer="")
+    fin, opcode, payload = read_frame
+    return nil unless fin
+    case opcode
+    when 0x0 # continuation frame
+      if fin
+        return buffer + payload
+      else
+        return read_data(buffer + payload)
+      end
+    when 0x1 # text frame
+      if fin
+        return buffer + payload
+      else
+        return read_data(buffer + payload)
+      end
+    else
+      return payload
+    end
+  end
+  
+  private
+  
+  def send_text(json_data)
+    message = json_data
+    bytes = [129]
+    size = message.bytesize
+  
+    bytes +=  if size <= 125
+                [size]
+              elsif size < 2**16
+                [126] + [size].pack("n").bytes
+              else
+                [127] + [size].pack("Q>").bytes
+              end
+  
+    bytes += message.bytes
+    data = bytes.pack("C*")
+    @id += 1
+    self << data
+  end
+  
+  def decomress(data)
+    if @compression and data.size > 0
+      # add trailer
+      out = @zin.inflate(data << "\000\000\377\377")
+    else
+      return data
+    end
+  end
+
+  def read_frame # methods https://github.com/mplatov/ruby-websocket-client
+    b1 = read_nonblock(1)
+    b1 = b1.unpack('C*')[0]
+    fin = (b1 & 0b10000000) == 0b10000000
+    opcode = (b1 & 0b00001111) 
+    b2 = read_nonblock(1)
+    b2 = b2.unpack('C*')[0]
+    mask = (b2 & 0b10000000) # MASK bit 
+      
+    len = (b2 & 0b01111111)
+    len = case len
+      when 126
+        b = read_nonblock(2)
+        len = b.unpack('n*')[0]
+      when 127
+        b = read_nonblock(8)
+        b.reverse! if !@big_endian
+        len = b.unpack('Q')[0]
+      else
+        len
+      end
+    payload = read_nonblock(len)
+    return fin, opcode, payload
+  end
+
+  def hass_connect
+    begin
+      connect(@hass_addr)
+    rescue IO::WaitWritable => e
+      IO.select(nil, [self])
+      begin
+        connect(@hass_addr)
+      rescue Errno::EISCONN => e
+        sleep 1
+        retry
+      end
+    end
+  end
+  
+  def make_handshake
+    [
+      "GET ws://#{@hass_host}:#{@hass_port}/api/websocket HTTP/1.1",
+      "Host: #{@hass_host}:#{@hass_port}",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      "Origin: #{@hass_address}",
+      "Sec-WebSocket-Key: sWlwf7JEB0szCFezxzsejA==",
+      "Sec-WebSocket-Version: 13"
+    ].join("\r\n") << "\r\n\r\n"
+  end
+  
+  def establish_websock(token)
+    raise 'handshake error' unless gets("\r\n\r\n").include?('HTTP/1.1 101 Switching Protocols')
+    send_text({type:'auth',access_token:token}.to_json)
+    Thread.abort_on_exception = true
+    Thread.new do
+      loop do
+        sleep 20
+        ping
+      end
+    end
+  end
+
+  def ping
+    send_text({
+      id:@id,
+      type:'ping'
+    }.to_json)
+  end
+
+end
+
+##########################################Helper Classes#####################################
+
+class ProfileServer < Socket
+
+  attr_reader :port, :socks, :lsof
+  
+  def initialize(port)
+    super(AF_INET, SOCK_STREAM, 0)
+    @port = port
+    @socks = []
+    @lsof = RUBY_PLATFORM.include?('linux') ? 'lsof' : '/usr/sbin/lsof'
+    connect(local_ip, self, port)
+  end
+  
+  def connect(addr, s, p)
+    b = Socket.sockaddr_in(p, addr)
+    s.setsockopt(:SOCKET, :REUSEADDR, true)
+    s.bind(b)
+    s.listen(5)
+    @socket = s
+  end
+  
+  def xfix(fix,type)
+    return unless fix
+    [fix.to_i(16)].pack('C') if type == 'hex'
+  end
+  
+  def accept
+    $l.debug "accepting profile connection on #{port}"
+    s,info = accept_nonblock
+    s.extend SocketMethods
+    s.port = info.ip_port
+    s.name = profile_name(info.ip_port)
+    s.prefix = ''
+    s.postfix = "\n"
+    s.delimiter = "\n"
+    $l.debug "new connection from #{s.name} on port #{port}"
+    socks << s
+  end
+  
+  def profile_name(port)
+    pid = `#{@lsof} -i TCP:#{port} | grep avc`.match(/\s(\d+)\s/)[1]
+    `ps -o command= -p #{pid}`.chop.split('avc ')[1]
+  end
+  
+  def read_lines(socket)
+    ready = IO.select(socks,nil,nil,READ_TIMEOUT)
+    return unless ready
+    ready[0].each do |s|
+      m = s.next_line
+      next unless m
+      $l.debug m
+      $l.debug "sent: #{socket.send_message(m)}"
+    end
+  end
+  
+  private
+  
+end
+
+module SocketMethods
+
+  attr_accessor :name, :port, :delimiter, :postfix, :prefix
+
+  def inspect
+    {name:name,port:port,pid:pid,delimiter:delimiter}.to_s
+  end
+  
+  def puts(*msg)
+  $l.debug [self,:writing,msg]
+    msg.each{|m| print("#{prefix}#{m.gsub(postfix,'')}#{postfix}")}
+  end
+
+  def read_bytes(len)
+    raise 'savant disconnected' if closed?
+    read_nonblock(len)
+  rescue IO::WaitReadable
+    nil
+  end
+
+  def non_block_read
+    loop do
+      new_data = read_bytes 1024
+      break unless new_data
+      buf << new_data
+      break if new_data.length < 1024
+      $l.debug buf
+    end
+  end
+
+  def next_line
+    @buf ||= ''
+    $l.debug buf.inspect
+    non_block_read
+    $l.debug buf.inspect
+    $l.debug delimiter.inspect
+    line = buf.slice!(/^.*#{delimiter}/)
+    (line = line.chomp) || line
+  end
+
+  private
+
+  attr_accessor :buf
+end
+
+# Code below is required for program startup. Modification is not recommended.
+
+def local_ip
+  return '0.0.0.0' if RUBY_PLATFORM == 'arm-linux-gnueabi'
+  Socket.ip_address_list.to_s[/ ((?!127)\d\d?\d?\.[0-9]+\.[0-9]+\.[0-9]+)/,1]
+end
+
+
+def update_profile(env)
+  `cp '#{env.profile_path}' '#{env.profile_home}'`
+  IO.write(env.profile_path, IO.read(env.profile_home).gsub(/<\w[^!\n]+>\s*<!.._run_once_..>/,'').gsub(/<!-#{}-_run_after_(.+)-#{}->/,'\1'))
+end
+
+def install(env,port)
+  $l.debug 'Profile was updated. Installing start trigger. Process will restart'
+  serv = TCPServer.new(local_ip,port)
+  bridge_port = serv.addr[1]
+  update_profile(env)
+  sleep 1
+  env.process_ids.each{|p| Process.kill('HUP',p)}
+  sleep 1
+  bridge_port
+rescue => e
+  $l.error [e,e.backtrace]
+  exit
+ensure
+  serv.close if serv
+end
+
+def uninstall(env)
+ `rm '#{env.script_path}'`
+ `rm '#{env.log_path}'`
+  exit
+end
+
+class Environment
+
+  attr_reader :profile_name, :profile_path, :script_path, :log_path, :home_path
+  attr_reader :profiles_path, :rpm_path, :lock_path, :profile_home, :bp_names, :process_ids
+
+  def initialize
+    @profile_name = File.basename($0)
+    if RUBY_PLATFORM.include?('linux')
+      @home_path = '/home/RPM/'
+      @rpm_path = "#{home_path}GNUstep/Library/ApplicationSupport/RacePointMedia/"
+      @scli ='/usr/local/bin/sclibridge'
+    else
+      @scli ='/Users/RPM/Applications/RacePointMedia/sclibridge'
+      @home_path = '/Users/RPM/'
+      @rpm_path = "#{home_path}Library/Application Support/RacePointMedia/"
+    end
+    @profiles_path = "#{rpm_path}userConfig.rpmConfig/componentProfiles/"
+    @profile_path = "#{profiles_path}#{profile_name}.xml"
+    @profile_home = "#{home_path}#{profile_name}.xml"
+    @script_path = "#{home_path}#{profile_name}"
+    @log_path = "#{home_path}#{profile_name}.log"
+    
+    find_component_names
+    update_pids
+    $l.debug [:names,@bp_names,:pids,@process_ids]
+  end
+
+  def find_component_names
+    names = []
+    str = "<string>#{@profile_name}</string>"
+    r = `basename -a "$(grep -lr -#{}-include "*.avc.plist" '#{str}' "#{@rpm_path}/statusfiles/")"`
+    r.chomp.split("\n").each {|n| names << n.split('.').first}
+    raise "no components found using #{str}" if names.empty?
+    @bp_names = names
+  end
+  
+  def update_pids
+    sleep 5
+    pids = []
+    @bp_names.each do |n|
+      r = `ps ax -o pid= -o command= | grep -v grep | grep 'avc #{n}'`.to_i
+      raise 'Savant System Still Loading. Sleeping' unless r > 0
+      pids << r
+    end
+    @process_ids = pids
+  rescue => e
+    exit unless e.to_s.include? 'Loading'
+    $l.error e
+    sleep 5
+    retry
+  end
+
+end
+
+def connection_info(env)
+  pattern = / po#{}rt="(\d+)".+proto#{}col="(\w+)"/
+  `grep '<ip po#{}rt' "#{env.profile_path}"`.match(pattern).captures
+end
+
+
+$l = Logger.new($stderr)
+$l.level = Logger::WARN
+$l.level = Logger::DEBUG if DEBUG
+env = Environment.new
+port, protocol = connection_info(env)
+$l.debug "script started with #{protocol} on #{port}"
+install(env,port.to_i) if protocol == 'udp'
+
+env.update_pids
+sleep 5
+`cp '#{env.profile_home}' '#{env.profile_path}'`
+$l.debug 'replaced original profile'
+
+begin
+  program_loop(port.to_i)
+rescue => e
+  $l.error [:unhandled_exception_extiting,e,e.backtrace]
+ensure
+  $l.error [:killing, env.process_ids]
+  env.process_ids.each{|p| Process.kill('HUP',p)}
+end
+
+__END__
+DO NOT REMOVE: required for the DATA object above.
+#]]>-->
