@@ -187,10 +187,10 @@
               <parameter parameter_data_type="character" action_argument="Address1"/>
               <parameter parameter_data_type="character">", "speed": "</parameter>
               <parameter parameter_data_type="character" state_variable="FanSet_*" wildcard_source="action_argument" wildcard_source_name="FanSpeed"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/fan/turn_on</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="500"/>
           </command>
@@ -225,10 +225,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -248,10 +248,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/light/turn_off</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -276,10 +276,10 @@
               <parameter parameter_data_type="character" action_argument="Address1"/>
               <parameter parameter_data_type="character">", "brightness_pct": "</parameter>
               <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -332,10 +332,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/lock/lock</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="500"/>
           </command>
@@ -352,10 +352,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/lock/unlock</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="500"/>
           </command>
@@ -383,10 +383,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/cover/close_cover</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
           </command>
         </command_interface>
@@ -401,10 +401,10 @@
               <parameter parameter_data_type="character">curl-d '</parameter>
               <parameter parameter_data_type="character">{"entity_id": "</parameter>
               <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
-              <parameter parameter_data_type="character">"}' </parameter>
-              
+              <parameter parameter_data_type="character">"}' '</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/services/cover/open_cover</parameter>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
           </command>
         </command_interface>
@@ -664,6 +664,7 @@ def program_loop(server_port)
         case r
         when profile_server
           profile_server.accept
+          
         when hass
           m = JSON.parse(hass.read_data)
           m = (m['result'] || m['event'] || m).to_json
@@ -674,21 +675,24 @@ def program_loop(server_port)
           message = r.gets("\n").chomp
           $l.debug [:from_savant,message]
           case message[0..3]
-          when 'curl'
-            m = "curl -s #{headers} '#{message[4..-1]}'"
-            $l.debug [:sending, m]
-            r.puts `#{m}`
-            
+          
           when 'scon'
             socks.delete(hass)
             server,tokn = message[4..-1].split(',')
             hass = Hass.new(server,tokn)
             socks << hass
             headers = "-H 'Content-Type: application/json' -H 'Authorization: Bearer #{tokn}'"
+            
+          when 'curl'
+            m = "curl -s #{headers} #{message[4..-1]}"
+            $l.debug [:sending, m]
+            r.puts `#{m}`
+            
           when 'sock'
             raise 'Hass websocket not connected' unless hass
             hass.send_data(message[4..-1])
-          end    
+          end
+          
         end
       end
     end
