@@ -58,7 +58,6 @@
     <state_variable name="FanSet_3" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed High">7</state_variable>
 
 
-    <state_variable name="coprocessor_connected" owning_logical_component="Shade Controller" state_center_binding="coprocessor_connected" state_center_type="integer">0</state_variable>
     <state_variable name="profile_name" owning_logical_component="CoProcessor" state_center_binding="profile_name" state_center_type="string">hass_websocket</state_variable>
     <state_variable name="prefix" owning_logical_component="CoProcessor" state_center_binding="prefix" state_center_type="string">---1-SVC_GEN_GENERIC-RunCLIProgram:COMMAND_STRING=</state_variable>
   </state_variable_list>
