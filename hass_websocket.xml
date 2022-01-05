@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="Websocket" alias="Home Assistant"
-  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.0">
+  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.1">
 
   <notes>
     Must set address on the wire to the host ip address
