@@ -7,12 +7,10 @@
     hass ip address and token need to be set in the state variables section
   </notes>
   <component_properties>
-    <listen_for_third_party_service_requests>true</listen_for_third_party_service_requests>
-    <!--_run_once_-->
+    <listen_for_third_party_service_requests>true</listen_for_third_party_service_requests><!--_run_once_-->
   </component_properties>
   <control_interfaces preferred="ip">
-    <ip port="25804" response_time_length_ms="1000" protocol="udp" local_port="25804">
-      <!--_run_once_-->
+    <ip port="25804" response_time_length_ms="1000" protocol="udp" local_port="25804"><!--_run_once_-->
       <!--_run_after_<ip port="25804" response_time_length_ms="10000" protocol="tcp">-->
       <!--_run_after_<send_postfix type="hex">0A</send_postfix>-->
       <receive_end_condition test_condition="data" type="hex">0A</receive_end_condition>
@@ -427,10 +425,11 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character">curl'</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/states/</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -442,10 +441,11 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character">curl'</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/states/</parameter>
               <parameter parameter_data_type="character" action_argument="GarageDoorAddress"/>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -457,10 +457,11 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character">curl'</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/states/</parameter>
               <parameter parameter_data_type="character" action_argument="DoorLockAddress"/>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -478,10 +479,11 @@
         <command_interface interface="ip">
           <command response_required="yes">
             <parameter_list>
-              <parameter parameter_data_type="character">curl</parameter>
+              <parameter parameter_data_type="character">curl'</parameter>
               <parameter parameter_data_type="character" state_variable="server_fqdn"/>
               <parameter parameter_data_type="character">/api/states/</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
+              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <response_codes>
               <rspmessage status="success" name="HassLightOn">
@@ -623,10 +625,8 @@
             <delay ms_delay="10000"/>
           </command>
         </command_interface>
-        <execute_on_schedule period_ms="0"/>
-        <!--_run_once_-->
-        <execute_on_schedule period_ms="30000"/>
-        <!--_run_once_-->
+        <execute_on_schedule period_ms="0"/><!--_run_once_-->
+        <execute_on_schedule period_ms="30000"/><!--_run_once_-->
       </action>
     </custom_component_actions>
   </logical_component>
@@ -1026,8 +1026,8 @@ class Environment
   def find_component_names
     names = []
     str = "<string>#{@profile_name}</string>"
-    r = `basename -a "$(grep -lr -#{}-include "*.avc.plist" '#{str}' "#{@rpm_path}/statusfiles/")"`
-    r.chomp.split("\n").each {|n| names << n.split('.').first}
+    r = `grep -lr -#{}-include "*.avc.plist" '#{str}' "#{@rpm_path}/statusfiles"`
+    r.chomp.split("\n").map{|s| s.split("/").last.split(".").first}
     raise "no components found using #{str}" if names.empty?
     @bp_names = names
   end
