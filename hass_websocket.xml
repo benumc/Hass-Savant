@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="Websocket" alias="Home Assistant"
-  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.1">
+  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.0">
 
   <notes>
     Must set address on the wire to the host ip address
@@ -539,90 +539,27 @@
   <logical_component logical_component_name="CoProcessor">
     <implementation/>
     <custom_component_actions>
-
       <action name="START">
         <command_interface interface="ip">
-          
           <command response_required="no">
-            <command_string type="character"/>
             <parameter_list>
-              <parameter parameter_data_type="character">-----</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">grep -A9999 'env </parameter>
+              <parameter parameter_data_type="character">ruby' '$(echo ~/*/*/*/u*/*/hass_websocket.xml)'|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
-            <delay ms_delay="500"/>
+            <delay ms_delay="3000"/>
           </command>
           <command response_required="no">
-            <command_string type="character"/>
             <parameter_list>
+              <parameter parameter_data_type="hex">0A</parameter>
               <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">echo 'cd ~;grep -A9999 "#\!" '>~/s1s</parameter>
+              <parameter parameter_data_type="character">grep -A9999 'env </parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">[ -d /Users ] &amp;&amp; echo '/Users/RPM/Library/Application\ Support'>~/s2s</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="100"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">[ -d /Users ] || echo '/home/RPM/GNUstep/Library/ApplicationSupport'>~/s2s</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">echo '/RacePointMedia/userConfig.rpmConfig/componentProfiles'>~/s3s</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">echo '/$1.xml>$1;ruby $1 &amp;>>$1.log &amp;!'>~/s4s</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">cat ~/s*s | tr -d '\n' > ~/rs</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">/bin/zsh ~/rs </parameter>
-              <parameter parameter_data_type="character" state_variable="profile_name"/>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="500"/>
-          </command>
-          <command response_required="no">
-            <command_string type="character"/>
-            <parameter_list>
-              <parameter parameter_data_type="character" state_variable="prefix"/>
-              <parameter parameter_data_type="character">rm ~/s1s ~/s2s ~/s3s ~/s4s</parameter>
-              <parameter parameter_data_type="hex">0A</parameter>
-            </parameter_list>
-            <delay ms_delay="10000"/>
+            <delay ms_delay="2000"/>
           </command>
         </command_interface>
         <execute_on_schedule period_ms="0"/><!--_run_once_-->
@@ -634,10 +571,10 @@
 </component>
 <!--[CDATA[ 
 #!/usr/bin/env ruby
-exit unless DATA.flock(File::LOCK_NB | File::LOCK_EX)
 ###################################################Set Globals###########################################
 DEBUG = true
 READ_TIMEOUT = 0.5
+PORT = 25804
 
 require 'socket'
 include Socket::Constants
@@ -646,9 +583,10 @@ require 'json'
 require 'base64'
 require 'uri'
 
-def program_loop(server_port)
-  profile_server = ProfileServer.new(server_port)
-  $l.debug [profile_server,:on,server_port]
+
+
+def program_loop(profile_server)
+  $l.debug [profile_server,:on,PORT]
   profile = nil
   headers = ''
   server = ''
@@ -974,20 +912,16 @@ def update_profile(env)
   IO.write(env.profile_path, IO.read(env.profile_home).gsub(/<\w[^!\n]+>\s*<!.._run_once_..>/,'').gsub(/<!-#{}-_run_after_(.+)-#{}->/,'\1'))
 end
 
-def install(env,port)
+def install(env,port,serv)
   $l.debug 'Profile was updated. Installing start trigger. Process will restart'
-  serv = TCPServer.new(local_ip,port)
-  bridge_port = serv.addr[1]
   update_profile(env)
   sleep 1
   env.process_ids.each{|p| Process.kill('HUP',p)}
   sleep 1
-  bridge_port
+  port
 rescue => e
   $l.error [e,e.backtrace]
   exit
-ensure
-  serv.close if serv
 end
 
 def uninstall(env)
@@ -1002,7 +936,7 @@ class Environment
   attr_reader :profiles_path, :rpm_path, :lock_path, :profile_home, :bp_names, :process_ids
 
   def initialize
-    @profile_name = File.basename($0)
+    @profile_name = 'hass_websocket'
     if RUBY_PLATFORM.include?('linux')
       @home_path = '/home/RPM/'
       @rpm_path = "#{home_path}GNUstep/Library/ApplicationSupport/RacePointMedia/"
@@ -1026,8 +960,8 @@ class Environment
   def find_component_names
     names = []
     str = "<string>#{@profile_name}</string>"
-    r = `grep -lr -#{}-include "*.avc.plist" '#{str}' "#{@rpm_path}/statusfiles"`
-    r.chomp.split("\n").map{|s| s.split("/").last.split(".").first}
+    r = `grep -lr -#{}-include "*.avc.plist" '#{str}' "#{@rpm_path}statusfiles"`
+    names = r.chomp.split("\n").map{|s| s.split("/").last.split(".").first}
     raise "no components found using #{str}" if names.empty?
     @bp_names = names
   end
@@ -1055,14 +989,18 @@ def connection_info(env)
   `grep '<ip po#{}rt' "#{env.profile_path}"`.match(pattern).captures
 end
 
+t_server = ProfileServer.new(PORT)
+Process.daemon
 
 $l = Logger.new($stderr)
+env = Environment.new
+$l = Logger.new(env.log_path,1,1024000)
 $l.level = Logger::WARN
 $l.level = Logger::DEBUG if DEBUG
 env = Environment.new
 port, protocol = connection_info(env)
 $l.debug "script started with #{protocol} on #{port}"
-install(env,port.to_i) if protocol == 'udp'
+install(env,port.to_i,t_server) if protocol == 'udp'
 
 env.update_pids
 sleep 5
@@ -1070,14 +1008,11 @@ sleep 5
 $l.debug 'replaced original profile'
 
 begin
-  program_loop(port.to_i)
+  program_loop(t_server)
 rescue => e
   $l.error [:unhandled_exception_extiting,e,e.backtrace]
 ensure
   $l.error [:killing, env.process_ids]
   env.process_ids.each{|p| Process.kill('HUP',p)}
 end
-
-__END__
-DO NOT REMOVE: required for the DATA object above.
 #]]>-->
