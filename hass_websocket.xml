@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="Websocket" alias="Home Assistant"
-  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.0">
+  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.1">
 
   <notes>
+    Version 2.1: Fix protocol error in websocket handshake that cause crash loop
     Must set address on the wire to the host ip address
     hass ip address and token need to be set in the state variables section
   </notes>
@@ -42,7 +43,7 @@
   <state_variable_list>
     <state_variable name="auth_token" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Long Lived User Access Token"/>
     <state_variable name="server_fqdn" owning_logical_component="Home Assistant" state_center_type="string"/>
-    <state_variable name="server_address" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server Address"/>
+    <state_variable name="server_address" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server Address">homeassistant.local</state_variable>
     <state_variable name="server_port" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server API Port">8123</state_variable>
 
     <dynamic_state_variable name="DoorLockStatus" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="DoorLockStatus"/>
@@ -291,9 +292,6 @@
             <unique_identifier address_component="1" name="DimmerLevel"/>
           </valueSource>
         </slider_representation>
-        <query_status_with_action name="QueryLightState" period_ms="0">
-          <with_arg name="Address1" address_component="1" format="%s"/>
-        </query_status_with_action>
         <query_status_with_action name="QueryLightState" period_ms="30000">
           <with_arg name="Address1" address_component="1" format="%s"/>
         </query_status_with_action>
@@ -309,10 +307,6 @@
             <unique_identifier name="CurrentLightNumber" address_component="1"/>
           </toggleOnUsingState>
         </toggle_button_representation>
-        <!-- Query state immediately -->
-        <query_status_with_action name="QueryLightState" period_ms="0">
-          <with_arg name="Address1" address_component="1" format="%s"/>
-        </query_status_with_action>
         <query_status_with_action name="QueryLightState" period_ms="30000">
           <with_arg name="Address1" address_component="1" format="%s"/>
         </query_status_with_action>
@@ -509,6 +503,11 @@
           </command>
         </command_interface>
       </action>
+      <action name="StartUp">
+        <!--_run_after_<execute_on_schedule period_ms="0"></execute_on_schedule>-->
+        <execute_action_after_delay ms_delay="10000" action_name="ConnectWebsocket" action_type="CUSTOM" use_polling_queue="false" clear_duplicated="false"></execute_action_after_delay>
+        <execute_action_after_delay ms_delay="15000" action_name="SubscribeEvents" action_type="CUSTOM" use_polling_queue="false" clear_duplicated="false"/>
+      </action>
       <action name="ConnectWebsocket">
         <update_state_variable name="server_fqdn" update_type="set" update_source="constant">http://</update_state_variable>
         <update_state_variable name="server_fqdn" update_type="append" update_source="state_variable">server_address</update_state_variable>
@@ -524,8 +523,6 @@
             </parameter_list>
           </command>
         </command_interface>
-        <!--_run_after_<execute_on_schedule period_ms="0"></execute_on_schedule>-->
-        <execute_action_after_delay ms_delay="5000" action_name="SubscribeEvents" action_type="CUSTOM" use_polling_queue="false" clear_duplicated="false"/>
       </action>
       <action name="SubscribeEvents">
         <command_interface interface="ip">
@@ -546,7 +543,17 @@
               <parameter parameter_data_type="hex">0A</parameter>
               <parameter parameter_data_type="character" state_variable="prefix"/>
               <parameter parameter_data_type="character">grep -A9999 'env </parameter>
-              <parameter parameter_data_type="character">ruby' '$(echo ~/*/*/*/u*/*/hass_websocket.xml)'|ruby</parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
+              <parameter parameter_data_type="hex">0A</parameter>
+            </parameter_list>
+            <delay ms_delay="3000"/>
+          </command>
+          <command response_required="no">
+            <parameter_list>
+              <parameter parameter_data_type="hex">0A</parameter>
+              <parameter parameter_data_type="character" state_variable="prefix"/>
+              <parameter parameter_data_type="character">grep -A9999 'env </parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
             <delay ms_delay="3000"/>
@@ -622,6 +629,7 @@ def program_loop(profile_server)
             headers = "-H 'Content-Type: application/json' -H 'Authorization: Bearer #{tokn}'"
             
           when 'curl'
+            next if headers == ''
             m = "curl -s #{headers} #{message[4..-1]}"
             $l.debug [:sending, m]
             r.puts `#{m}`
@@ -660,7 +668,8 @@ class Hass < Socket
     @buffer = {}
     
     hass_connect
-    self.print(make_handshake)
+    hs = make_handshake
+    self.print(hs)
     establish_websock(token)
     
   end
@@ -763,7 +772,7 @@ class Hass < Socket
   
   def make_handshake
     [
-      "GET ws://#{@hass_host}:#{@hass_port}/api/websocket HTTP/1.1",
+      "GET /api/websocket HTTP/1.1",
       "Host: #{@hass_host}:#{@hass_port}",
       "Upgrade: websocket",
       "Connection: Upgrade",
@@ -774,7 +783,8 @@ class Hass < Socket
   end
   
   def establish_websock(token)
-    raise 'handshake error' unless gets("\r\n\r\n").include?('HTTP/1.1 101 Switching Protocols')
+    r = gets("\r\n\r\n")
+    raise 'handshake error' unless r.include?('HTTP/1.1 101 Switching Protocols')
     send_text({type:'auth',access_token:token}.to_json)
     Thread.abort_on_exception = true
     Thread.new do
