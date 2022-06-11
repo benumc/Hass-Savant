@@ -3,6 +3,7 @@
   device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.7">
 
   <notes>
+    Version 2.8: Fixed switch control domain from light to switch
     Version 2.7: Complete feedback re-write. Now uses a comma separated list to ignore or include keys for feedback based on a state variable. "all" followed by any other keys will allow all keys except any specified after all. Otherwise will ignore all keys except those in the list. Default is "brightness,state"
     Version 2.6: Adjusted feedback scaling to 0-255
     Version 2.5: More data filtering and added support for service call handling. Removed tracking for grouped entites as these should receive their own updates.
@@ -36,7 +37,6 @@
     If the General Programmable Service Requests service has been disabled in the zone that is entered, then the script won't run.
     If the General Programmable Service Requests service has been disabled in all zones then the script can't ever run.
     If the General Programmable Service Requests service is only enabled in a single zone then the user_zone state can be left blank.
-    
   </notes>
   <component_properties>
     <listen_for_third_party_service_requests>true</listen_for_third_party_service_requests><!--_run_once_-->
@@ -383,7 +383,7 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"light","service":"turn_on","service_data":{"entity_id":"</parameter>
+              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"switch","service":"turn_on","service_data":{"entity_id":"</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
               <parameter parameter_data_type="character">"}}</parameter>
             </parameter_list>
@@ -402,7 +402,7 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"light","service":"turn_off","service_data":{"entity_id":"</parameter>
+              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"switch","service":"turn_off","service_data":{"entity_id":"</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
               <parameter parameter_data_type="character">"}}</parameter>
             </parameter_list>
