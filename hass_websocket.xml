@@ -1,15 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="Websocket" alias="Home Assistant"
-  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.1">
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Hass" model="WS" alias="Home Assistant"
+  device_class="Lighting_controller" minimum_component_engine_version="0" rpm_xml_version="2.7">
 
   <notes>
-    Version 2.1: Fix protocol error in websocket handshake that cause crash loop
+    Version 2.7: Complete feedback re-write. Now uses a comma separated list to ignore or include keys for feedback based on a state variable. "all" followed by any other keys will allow all keys except any specified after all. Otherwise will ignore all keys except those in the list. Default is "brightness,state"
+    Version 2.6: Adjusted feedback scaling to 0-255
+    Version 2.5: More data filtering and added support for service call handling. Removed tracking for grouped entites as these should receive their own updates.
+    Version 2.4: Further reduced incoming data and added initial state gathering. Limited group support. Still need to support more entity types
+    Version 2.3: Status Feedback Overhaul to filter down closer to useful information. Still needs quite a bit of work.
+    Version 2.2: Limited parsing for incoming data and required userzone needed in state variables section.
+    Version 2.1: Fix protocol error in websocket handshake
+    
+    ToDo. Add support for all savant supported entities.
+      Dimmer(working), Switch(Working), Button(generic states only as call service), Thermostat(generic states only), fans(generic states only), garage door, door lock etc.
+    
+    ToDo Optional
+      Could replace install script with two other profiles to reduce complexity and startup time and reduce the chances of a startup loop. Not sure which is better or easier for average user.
+    
+    Setup
     Must set address on the wire to the host ip address
-    hass ip address and token need to be set in the state variables section
+    hass (ip address or hostname) and token need to be set in the state variables section
+    
+    Keep in mind that this is written with only a virtual home assistant system and feedback from those that try it. 
+    Improvements can only be made when issues are well described and preferably include output from rpmterminal when possible.
+    The co-processor script also includes a log file on the host at ~/hass_ws.log.
+    
+    If you run into problems getting the profile to connect, try the following:
+    1) Wait a few minutes after the system has come online. The profile goes through several steps to install the communication co-processor and on smart hosts especially this can take some time.
+    2) Double check that your long lived access token and hass (ip address or hostname) are set correctly in the state variables section. If using hostname then make sure that the savant host is on the same subnet as the hass serever and it can communicate with the hass server using its hostname.
+    3) Make sure that the IP Address on the wire in blueprint is set to the IP ADDRESs of THE SAVANT HOST. This is critical for the installation script to run.
+    
+    If still having trouble, try setting the user_zone state variable on the component to exactly match a short userzone in your config like Pool or Den. This can be important, especially for smart hosts with many user zones. When the start-up script runs by default, it will execute once for every zone that exists in the project. On a pro host this probably isn't a big deal but setting the value correctly will always improve performance at any reboot or upload.
+    A couple more notes about the user_zone state:
+    If the name of the zone is too long then the startup script could fail.
+    If the General Programmable Service Requests service has been disabled in the zone that is entered, then the script won't run.
+    If the General Programmable Service Requests service has been disabled in all zones then the script can't ever run.
+    If the General Programmable Service Requests service is only enabled in a single zone then the user_zone state can be left blank.
+    
   </notes>
   <component_properties>
     <listen_for_third_party_service_requests>true</listen_for_third_party_service_requests><!--_run_once_-->
   </component_properties>
+  
   <control_interfaces preferred="ip">
     <ip port="25804" response_time_length_ms="1000" protocol="udp" local_port="25804"><!--_run_once_-->
       <!--_run_after_<ip port="25804" response_time_length_ms="10000" protocol="tcp">-->
@@ -46,19 +78,17 @@
     <state_variable name="server_address" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server Address">homeassistant.local</state_variable>
     <state_variable name="server_port" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Hass Server API Port">8123</state_variable>
 
-    <dynamic_state_variable name="DoorLockStatus" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="DoorLockStatus"/>
-    <dynamic_state_variable name="IsDoorLocked" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="IsDoorLocked"/>
-    <dynamic_state_variable name="GarageDoorStatus" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="GarageDoorStatus"/>
-    <dynamic_state_variable name="DimmerLevel" owning_logical_component="Home Assistant" state_center_type="string" state_center_binding="DimmerLevel" min_value="0" max_value="255"/>
-
     <state_variable name="FanSet_0" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Off">0</state_variable>
     <state_variable name="FanSet_1" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Low">2</state_variable>
     <state_variable name="FanSet_2" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed Mid">4</state_variable>
     <state_variable name="FanSet_3" owning_logical_component="Home Assistant" state_center_type="string" user_editable="yes" note="Fan Speed High">7</state_variable>
 
 
-    <state_variable name="profile_name" owning_logical_component="CoProcessor" state_center_binding="profile_name" state_center_type="string">hass_websocket</state_variable>
-    <state_variable name="prefix" owning_logical_component="CoProcessor" state_center_binding="prefix" state_center_type="string">---1-SVC_GEN_GENERIC-RunCLIProgram:COMMAND_STRING=</state_variable>
+    <state_variable name="profile_name" owning_logical_component="CoProcessor" state_center_type="string" state_center_binding="profile_name">hass_ws</state_variable>
+    <state_variable name="user_zone" owning_logical_component="CoProcessor" state_center_type="string" state_center_binding="user_zone" user_editable="yes"></state_variable>
+    <state_variable name="prefix" owning_logical_component="CoProcessor" state_center_type="string" state_center_binding="prefix" user_editable="yes">---1-SVC_GEN_GENERIC-RunCLIProgram:COMMAND_STRING=</state_variable>
+
+    <state_variable name="state_filter" owning_logical_component="CoProcessor"  state_center_type="string" state_center_binding="state_filter" user_editable="yes">brightness,state</state_variable>
   </state_variable_list>
   <logical_component logical_component_name="Home Assistant">
     <implementation>
@@ -66,105 +96,240 @@
     </implementation>
 
     <status_messages>
-      <status_message name="DoorLockStatusMessage">
-        <!--
-                    Example message.
-                    {"entity_id": "lock.garage_door", "state": "locked", "attributes": {"battery_level": 90, "friendly_name": "Garage Door"}, "last_changed": "2021-09-29T22:14:10.122864+00:00", "last_updated": "2021-09-29T22:14:10.122864+00:00", "context": {"id": "9a47194a56f53617d3def34584cd92f8", "parent_id": null, "user_id": null}}
-                -->
-        <root_object name="none" matches_required="all" format="json">
-          <values path="//entity_id" matches_required="at_least_one">
-            <update state="EntityID" type="string"/>
-          </values>
-          <values path="//state" matches_required="at_least_one">
-            <value_map match_required="yes">
-              <map key="locked">
-                <update state="DoorLockStatus" type="string">Locked</update>
-                <update state="IsDoorLocked" type="boolean">true</update>
-              </map>
-              <map key="unlocked">
-                <update state="DoorLockStatus" type="string">Unlocked</update>
-                <update state="IsDoorLocked" type="boolean">false</update>
-              </map>
-            </value_map>
-          </values>
-        </root_object>
-        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      <status_message name="Brightness2">
+        <constant type="character">2|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <constant type="character">new_state|attributes|brightness|</constant>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="integer" />
+          <data_map match_required="no">
+            <convert>
+              <multiply>100</multiply>
+              <divide>255</divide>
+              <update state="DimmerLevel" type="integer"></update>
+            </convert>
+          </data_map>
+        </data>
+        <append_data_to_state_names state="EntityID" />
       </status_message>
 
-      <status_message name="GarageDoorStatusMessage">
-        <!--
-                    Example message.
-                    {"entity_id": "lock.garage_door", "state": "locked", "attributes": {"battery_level": 90, "friendly_name": "Garage Door"}, "last_changed": "2021-09-29T22:14:10.122864+00:00", "last_updated": "2021-09-29T22:14:10.122864+00:00", "context": {"id": "9a47194a56f53617d3def34584cd92f8", "parent_id": null, "user_id": null}}
-                -->
-        <root_object name="none" matches_required="all" format="json">
-          <values path="//entity_id" matches_required="at_least_one">
-            <update state="EntityID" type="string"/>
-          </values>
-          <values path="//state" matches_required="at_least_one">
-            <value_map match_required="yes">
-              <map key="closed">
-                <update state="GarageDoorStatus" type="string">Closed</update>
-              </map>
-              <map key="open">
-                <update state="GarageDoorStatus" type="string">Open</update>
-              </map>
-            </value_map>
-          </values>
-        </root_object>
-        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      <status_message name="Brightness1">
+        <constant type="character">1|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <constant type="character">attributes|brightness|</constant>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="integer" />
+          <data_map match_required="no">
+            <convert>
+              <multiply>100</multiply>
+              <divide>255</divide>
+              <update state="DimmerLevel" type="integer"></update>
+            </convert>
+          </data_map>
+        </data>
+        <append_data_to_state_names state="EntityID" />
       </status_message>
 
-      <status_message name="LightStatusMessage">
-        <!--
-                    Example message.
-                    {"entity_id": "light.master_bedroom_main_lights", "state": "on", "attributes": {"supported_color_modes": ["brightness"], "color_mode": "brightness", "brightness": 53, "device_id": "3", "zone_id": "1", "friendly_name": "Master Bedroom_Main Lights", "supported_features": 33}, "last_changed": "2021-09-30T06:02:36.862424+00:00", "last_updated": "2021-09-30T06:02:50.412270+00:00", "context": {"id": "9b2376792d947a907e9969ccf35b71b8", "parent_id": null, "user_id": "ceee07c379604714b7d725ef957f81fd"}}
-                -->
-        <root_object name="none" matches_required="all" format="json">
-          <values path="//entity_id" matches_required="at_least_one">
-            <update state="EntityID" type="string"/>
-          </values>
-          <values path="//state" matches_required="at_least_one">
-            <value_map match_required="yes">
-              <map key="on">
-                <!-- 0-255 scale -->
-                <update state="DimmerLevel" type="integer"/>
-                <update state="IsDimmerOn" type="boolean">true</update>
-                <update state="LightPowerStatus" type="string">ON</update>
-                <update state="isLightOn" type="boolean">true</update>
-              </map>
-              <map key="off">
-                <update state="DimmerLevel" type="integer"/>
-                <update state="IsDimmerOn" type="boolean">false</update>
-                <update state="LightPowerStatus" type="string">OFF</update>
-                <update state="isLightOn" type="boolean">false</update>
-              </map>
-            </value_map>
-          </values>
-        </root_object>
-        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      <status_message name="State1">
+        <constant type="character">1|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <constant type="character">new_state|state|</constant>
+        <data type="character" terminator_type="end_of_data">
+          <update state="CurrentState" type="string"/>
+          <data_map match_required="no">
+            <map key="on">
+              <update state="IsDimmerOn" type="boolean">true</update>
+              <update state="LightPowerStatus" type="string">ON</update>
+              <update state="IsLightOn" type="boolean">true</update>
+              <update state="DoorLockStatus" type="string">Unlocked</update>
+              <update state="GarageDoorStatus" type="string">Open</update>
+            </map>
+            <map key="off">
+              <update state="IsDimmerOn" type="boolean">false</update>
+              <update state="LightPowerStatus" type="string">OFF</update>
+              <update state="IsLightOn" type="boolean">false</update>
+              <update state="DoorLockStatus" type="string">Locked</update>
+              <update state="GarageDoorStatus" type="string">Closed</update>
+              <update state="DimmerLevel" type="integer">0</update>
+            </map>
+          </data_map>
+        </data>
+        <append_data_to_state_names state="EntityID" />
       </status_message>
 
-      <status_message name="FanStatusMessage">
-        <!--
-                    Example message.
-                    {"entity_id": "fan.master_bedroom_fan", "state": "on", "attributes": {"speed_list": ["off", "1", "2", "3", "4", "5", "6", "7"], "preset_modes": [], "direction": "forward", "oscillating": false, "speed": "7", "percentage": 100, "percentage_step": 14.285714285714286, "preset_mode": null, "autocomfort": "OFF", "smartmode": "OFF", "room": "Master Bedroom", "friendly_name": "Master Bedroom Fan", "supported_features": 7}, "last_changed": "2021-09-30T03:34:49.995068+00:00", "last_updated": "2021-09-30T03:34:50.010272+00:00", "context": {"id": "e7b2d16f1b722574b04f3f75f0815e31", "parent_id": null, "user_id": null}}
-                -->
-        <root_object name="none" matches_required="all" format="json">
-          <values path="//entity_id" matches_required="at_least_one">
-            <update state="EntityID" type="string"/>
-          </values>
-          <values path="//state" matches_required="at_least_one">
-            <value_map match_required="yes">
-              <map key="on">
-                <update state="GarageDoorStatus" type="string">Closed</update>
-              </map>
-              <map key="off">
-                <update state="GarageDoorStatus" type="string">Open</update>
-              </map>
-            </value_map>
-          </values>
-        </root_object>
-        <append_data_to_state_names state="EntityID" note="Entity ID"/>
+      <status_message name="State0">
+        <constant type="character">0|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <constant type="character">state|</constant>
+        <data type="character" terminator_type="end_of_data">
+          <update state="CurrentState" type="string"/>
+          <data_map match_required="no">
+            <map key="on">
+              <update state="IsDimmerOn" type="boolean">true</update>
+              <update state="LightPowerStatus" type="string">ON</update>
+              <update state="IsLightOn" type="boolean">true</update>
+              <update state="DoorLockStatus" type="string">Unlocked</update>
+              <update state="GarageDoorStatus" type="string">Open</update>
+            </map>
+            <map key="off">
+              <update state="IsDimmerOn" type="boolean">false</update>
+              <update state="LightPowerStatus" type="string">OFF</update>
+              <update state="IsLightOn" type="boolean">false</update>
+              <update state="DoorLockStatus" type="string">Locked</update>
+              <update state="GarageDoorStatus" type="string">Closed</update>
+              <update state="DimmerLevel" type="integer">0</update>
+            </map>
+          </data_map>
+        </data>
+        <append_data_to_state_names state="EntityID" />
+      </status_message>
+
+      <status_message name="Depth4">
+        <constant type="character">4|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key0" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key1" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key2" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key3" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key4" type="string" />
+        </data>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="string" />
+        </data>
+        <append_data_to_state_names state="EntityID" />
+        <append_data_to_state_names state="Key0" />
+        <append_data_to_state_names state="Key1" />
+        <append_data_to_state_names state="Key2" />
+        <append_data_to_state_names state="Key3" />
+        <append_data_to_state_names state="Key4" />
+      </status_message>
+
+      <status_message name="Depth3">
+        <constant type="character">3|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key0" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key1" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key2" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key3" type="string" />
+        </data>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="string" />
+        </data>
+        <append_data_to_state_names state="EntityID" />
+        <append_data_to_state_names state="Key0" />
+        <append_data_to_state_names state="Key1" />
+        <append_data_to_state_names state="Key2" />
+        <append_data_to_state_names state="Key3" />
+      </status_message>
+
+      <status_message name="Depth2">
+        <constant type="character">2|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key0" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key1" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key2" type="string" />
+        </data>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="string" />
+        </data>
+        <append_data_to_state_names state="EntityID" />
+        <append_data_to_state_names state="Key0" />
+        <append_data_to_state_names state="Key1" />
+        <append_data_to_state_names state="Key2" />
+      </status_message>
+
+      <status_message name="Depth1">
+        <constant type="character">1|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key0" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key1" type="string" />
+        </data>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="string" />
+        </data>
+        <append_data_to_state_names state="EntityID" />
+        <append_data_to_state_names state="Key0" />
+        <append_data_to_state_names state="Key1" />
+      </status_message>
+      <status_message name="Depth0">
+        <constant type="character">0|</constant>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <data type="character" terminator="|" terminator_type="character">
+          <update state="Key0" type="string" />
+        </data>
+        <data type="character" terminator_type="end_of_data">
+          <update state="Value" type="string" />
+        </data>
+        <append_data_to_state_names state="EntityID" />
+        <append_data_to_state_names state="Key0" />
+      </status_message>
+
+      <status_message name="Service">
+        <constant type="character">type:</constant>
+        <data type="character" terminator="," terminator_type="character">
+          <update state="Type" type="string" />
+        </data>
+        <constant type="character">entity:</constant>
+        <data type="character" terminator="," terminator_type="character">
+          <update state="EntityID" type="string" />
+        </data>
+        <constant type="character">service:</constant>
+        <data type="character" terminator="," terminator_type="character">
+          <update state="ServiceState" type="string"/>
+        </data>
+        <constant type="character">domain:</constant>
+        <data type="character" terminator="," terminator_type="end_of_data">
+          <update state="FriendlyName" type="string"/>
+        </data>
+        <append_data_to_state_names state="EntityID" />
+      </status_message>
+
+      <status_message name="Unhandled">
+        <data type="character" terminator_type="end_of_data">
+          <update state="Unhandled" type="string"></update>
+        </data>
       </status_message>
     </status_messages>
 
@@ -204,16 +369,13 @@
             <unique_identifier name="DeviceID" address_component="1"/>
           </valueSource>
         </slider_representation>
-        <query_status_with_action name="QueryFanState" period_ms="30000">
-          <with_arg name="Address1" address_component="1" format="%s"/>
-        </query_status_with_action>
       </entity>
     </resource_component_actions>
 
     <resource_component_actions resource_type="ENV_LIGHTINGCONTROLLER_SOURCE">
       <action name="SwitchOn">
         <action_argument name="Address1" note="Entity ID"/>
-        <action_argument name="Address2" note=""/>
+        <action_argument name="Address2" note="Savant ID"/>
         <action_argument name="Address3" note=""/>
         <action_argument name="Address4" note=""/>
         <action_argument name="Address5" note=""/>
@@ -221,13 +383,9 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl-d '</parameter>
-              <parameter parameter_data_type="character">{"entity_id": "</parameter>
+              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"light","service":"turn_on","service_data":{"entity_id":"</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
-              <parameter parameter_data_type="character">"}' '</parameter>
-              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
-              <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
-              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character">"}}</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -236,7 +394,7 @@
 
       <action name="SwitchOff">
         <action_argument name="Address1" note="Entity ID"/>
-        <action_argument name="Address2" note=""/>
+        <action_argument name="Address2" note="Savant ID"/>
         <action_argument name="Address3" note=""/>
         <action_argument name="Address4" note=""/>
         <action_argument name="Address5" note=""/>
@@ -244,13 +402,9 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl-d '</parameter>
-              <parameter parameter_data_type="character">{"entity_id": "</parameter>
+              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"light","service":"turn_off","service_data":{"entity_id":"</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
-              <parameter parameter_data_type="character">"}' '</parameter>
-              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
-              <parameter parameter_data_type="character">/api/services/light/turn_off</parameter>
-              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character">"}}</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -270,31 +424,24 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl-d '</parameter>
-              <parameter parameter_data_type="character">{"entity_id": "</parameter>
+              <parameter parameter_data_type="character">sock{"type":"call_service","domain":"light","service":"turn_on","service_data":{"entity_id":"</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
               <parameter parameter_data_type="character">", "brightness_pct": "</parameter>
               <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
-              <parameter parameter_data_type="character">"}' '</parameter>
-              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
-              <parameter parameter_data_type="character">/api/services/light/turn_on</parameter>
-              <parameter parameter_data_type="character">'</parameter>
+              <parameter parameter_data_type="character">"}}</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
         </command_interface>
       </action>
 
-      <entity address_components="1" name="Dimmer Group">
+      <entity name="Dimmer Group" address_components="1">
         <slider_representation>
           <press_action name="DimmerSet"/>
           <valueSource name="DimmerLevel">
-            <unique_identifier address_component="1" name="DimmerLevel"/>
+            <unique_identifier address_component="1" name="Address1" format="%s"/>
           </valueSource>
         </slider_representation>
-        <query_status_with_action name="QueryLightState" period_ms="30000">
-          <with_arg name="Address1" address_component="1" format="%s"/>
-        </query_status_with_action>
       </entity>
 
       <entity name="Switch" address_components="1">
@@ -303,13 +450,10 @@
           <toggle_release_action name="SwitchOff"> </toggle_release_action>
           <osd_press_action name="SwitchOn"> </osd_press_action>
           <osd_hold_action name="SwitchOff"> </osd_hold_action>
-          <toggleOnUsingState name="isLightOn">
-            <unique_identifier name="CurrentLightNumber" address_component="1"/>
+          <toggleOnUsingState name="IsLightOn">
+            <unique_identifier name="Address1" address_component="1" format="%s"/>
           </toggleOnUsingState>
         </toggle_button_representation>
-        <query_status_with_action name="QueryLightState" period_ms="30000">
-          <with_arg name="Address1" address_component="1" format="%s"/>
-        </query_status_with_action>
       </entity>
     </resource_component_actions>
 
@@ -354,14 +498,11 @@
         </command_interface>
       </action>
 
-      <entity name="Lock" address_components="1">
+      <entity name="Lock" address_components="2">
         <toggle_button_representation>
           <release_action name="UnlockDoorLock"/>
           <toggle_release_action name="LockDoorLock"/>
         </toggle_button_representation>
-        <query_status_with_action name="QueryDoorLockState" period_ms="30000">
-          <with_arg name="DoorLockAddress" address_component="1" format="%s"/>
-        </query_status_with_action>
       </entity>
     </resource_component_actions>
 
@@ -407,9 +548,6 @@
           <release_action name="OpenGarageDoor"/>
           <toggle_release_action name="CloseGarageDoor"/>
         </toggle_button_representation>
-        <query_status_with_action name="QueryGarageDoorState" period_ms="30000">
-          <with_arg name="GarageDoorAddress" address_component="1" format="%s"/>
-        </query_status_with_action>
       </entity>
     </resource_component_actions>
 
@@ -419,11 +557,8 @@
         <command_interface interface="ip">
           <command response_required="no">
             <parameter_list>
-              <parameter parameter_data_type="character">curl'</parameter>
-              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
-              <parameter parameter_data_type="character">/api/states/</parameter>
+              <parameter parameter_data_type="character">tabl</parameter>
               <parameter parameter_data_type="character" action_argument="Address1"/>
-              <parameter parameter_data_type="character">'</parameter>
             </parameter_list>
             <delay ms_delay="250"/>
           </command>
@@ -487,11 +622,11 @@
                     <value_map match_required="yes">
                       <map key="off">
                         <update state="LightPowerStatus" type="string">OFF</update>
-                        <update state="isLightOn" type="boolean">false</update>
+                        <update state="IsLightOn" type="boolean">false</update>
                       </map>
                       <map key="on">
                         <update state="LightPowerStatus" type="string">ON</update>
-                        <update state="isLightOn" type="boolean">true</update>
+                        <update state="IsLightOn" type="boolean">true</update>
                       </map>
                     </value_map>
                   </values>
@@ -517,9 +652,11 @@
           <command response_required="no">
             <command_string type="character">scon</command_string>
             <parameter_list>
-              <parameter parameter_data_type="character" state_variable="server_fqdn"/>
+              <parameter parameter_data_type="character" state_variable="server_fqdn" />
               <parameter parameter_data_type="character">,</parameter>
-              <parameter parameter_data_type="character" state_variable="auth_token"/>
+              <parameter parameter_data_type="character" state_variable="auth_token" />
+              <parameter parameter_data_type="character">,</parameter>
+              <parameter parameter_data_type="character" state_variable="state_filter" />
             </parameter_list>
           </command>
         </command_interface>
@@ -541,9 +678,10 @@
           <command response_required="no">
             <parameter_list>
               <parameter parameter_data_type="hex">0A</parameter>
+              <parameter parameter_data_type="character" state_variable="user_zone"/>
               <parameter parameter_data_type="character" state_variable="prefix"/>
               <parameter parameter_data_type="character">grep -A9999 'env </parameter>
-              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*g.r*/*/hass_ws.xml)"|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
             <delay ms_delay="3000"/>
@@ -551,9 +689,10 @@
           <command response_required="no">
             <parameter_list>
               <parameter parameter_data_type="hex">0A</parameter>
+              <parameter parameter_data_type="character" state_variable="user_zone"/>
               <parameter parameter_data_type="character" state_variable="prefix"/>
               <parameter parameter_data_type="character">grep -A9999 'env </parameter>
-              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/*g.r*/*/hass_ws.xml)"|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
             <delay ms_delay="3000"/>
@@ -561,9 +700,10 @@
           <command response_required="no">
             <parameter_list>
               <parameter parameter_data_type="hex">0A</parameter>
+              <parameter parameter_data_type="character" state_variable="user_zone"/>
               <parameter parameter_data_type="character" state_variable="prefix"/>
               <parameter parameter_data_type="character">grep -A9999 'env </parameter>
-              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/*/u*/*/hass_websocket.xml)"|ruby</parameter>
+              <parameter parameter_data_type="character">ruby' "$(echo ~/*/*/*/*/*g.r*/*/hass_ws.xml)"|ruby</parameter>
               <parameter parameter_data_type="hex">0A</parameter>
             </parameter_list>
             <delay ms_delay="2000"/>
@@ -576,7 +716,13 @@
   </logical_component>
 
 </component>
-<!--[CDATA[ 
+<!--[CDATA[
+
+
+
+
+
+
 #!/usr/bin/env ruby
 ###################################################Set Globals###########################################
 DEBUG = true
@@ -602,7 +748,7 @@ def program_loop(profile_server)
     socks = profile_server.socks
     socks << profile_server
     loop do
-      $l.debug [:listen_on,socks]
+      # $l.debug [:listen_on,socks]
       ready = select(socks,nil,nil,30)
       raise 'no connection from savant after 30 seconds. exiting' unless ready
       ready[0].each do |r|
@@ -611,32 +757,50 @@ def program_loop(profile_server)
           profile_server.accept
           
         when hass
-          m = JSON.parse(hass.read_data)
-          m = (m['result'] || m['event'] || m).to_json
-          $l.debug [:from_hass,m]
-          profile.puts m
+          d = hass.read_data
+          # $l.debug d
+          m = JSON.parse(d)
+          next unless m
+
+          case m['type']
+          when 'event'
+            m = hass.parse_event(m['event'])
+          when 'result'
+            m = hass.parse_result(m)
+          when 'pong'
+            m = 'pong'
+          when 'auth_required'
+            next
+          else
+            next
+          end
+          next unless m
+          profile.puts_message(m)
+
         else
           profile = r
           message = r.gets("\n").chomp
           $l.debug [:from_savant,message]
+
           case message[0..3]
-          
           when 'scon'
             socks.delete(hass)
-            server,tokn = message[4..-1].split(',')
+            server, tokn, *$filter = message[4..-1].split(',')
+            $l.debug [:ws_connect, server, tokn, $filter]
             hass = Hass.new(server,tokn)
             socks << hass
             headers = "-H 'Content-Type: application/json' -H 'Authorization: Bearer #{tokn}'"
-            
+            hass.send_data({'type'=>'get_states'})
           when 'curl'
             next if headers == ''
             m = "curl -s #{headers} #{message[4..-1]}"
             $l.debug [:sending, m]
-            r.puts `#{m}`
+            r.puts_message `#{m}`
             
           when 'sock'
             raise 'Hass websocket not connected' unless hass
             hass.send_data(message[4..-1])
+
           end
           
         end
@@ -650,12 +814,14 @@ ensure
   profile_server.close if profile_server rescue nil
 end
 
+
+
 ##########################################Helper Classes#####################################
 
 class Hass < Socket
   
   def initialize(hass_address,token)
-  $l.debug [:connecting_to, hass_address]
+    $l.debug [:connecting_to, hass_address]
     super(AF_INET, SOCK_STREAM, 0)
     
     
@@ -675,14 +841,14 @@ class Hass < Socket
   end
   
   def send_data(data)
-    result = JSON.parse(data)
-    result['id'] = @id
-    send_text(result.to_json)
+    data = JSON.parse(data) unless data.is_a?(Hash)
+    data['id'] = @id
+    send_text(data.to_json)
   end
 
   def read_data(buffer="")
     fin, opcode, payload = read_frame
-    return nil unless fin
+    #return buffer unless fin
     case opcode
     when 0x0 # continuation frame
       if fin
@@ -699,6 +865,122 @@ class Hass < Socket
     else
       return payload
     end
+
+  end
+
+  def extra_data(d, e)
+
+    d << "temperature:#{e['temperature']},"
+    d << "device_class:#{e['device_class']},"
+
+    d << "color_mode:#{e['color_mode']},"
+    d << "color_temp:#{e['color_temp']},"
+    d << "white_value:#{e['white_value']},"
+
+    v = e['hs_color'] || []
+    d << "hue:#{v[0]},"
+    d << "saturation:#{v[1]},"
+    
+    v = e['rgb_color'] || []
+    d << "red:#{v[0]},"
+    d << "green:#{v[1]},"
+    d << "blue:#{v[2]},"
+    
+    v = e['xy_color'] || []
+    d << "x_color:#{v[0]},"
+    d << "y_color:#{v[1]},"
+    d
+  end
+
+  def parse_event(js_data)
+    case js_data['event_type']
+    when 'state_changed'
+      return parse_state(js_data['data'])
+    when 'call_service'
+      return parse_service(js_data['data'])
+    else
+      return [:unknown, js_data['event_type']]
+    end
+    
+  end
+
+  def parse_service(data)
+    out = []
+    a = data['service_data']
+    s = data['service']
+    m = data['domain']
+    return [] unless a
+    *entities = a['entity_id']
+    entities.flatten.each do |e|
+      next unless e
+      d = ['type:call_service']
+      d << "entity:#{e}"
+      d << "service:#{s}"
+      d << "domain:#{m}"
+      out << d.join(',')
+    end
+    out
+  end
+
+  def from_string_with_key(k,st,out,key,depth=0)
+    # $l.debug [:key, key, $filter.include?(key)]
+    if $filter[0].downcase == 'all'
+      return out if $filter.include?(key)
+    else
+      return out unless $filter.include?(key)
+    end
+
+    out << "#{depth}|#{k}|#{st}"
+
+  end
+
+  def from_array_with_key(k,a,out,depth=0)
+    a.each_with_index do |v,key|
+      wk = "#{k}|#{key}"
+      if v.is_a?(Hash)
+        out = from_hash_with_key(wk,v,out,depth+1)
+      elsif v.is_a?(Array)
+        out = from_array_with_key(wk,v,out,depth+1)
+      else
+        out = from_string_with_key(wk,v,out,key,depth)
+      end
+    end
+    out
+  end
+
+  def from_hash_with_key(k,h,out,depth=0)
+    h.each do |key,v|
+      wk = "#{k}|#{key}"
+      if v.is_a?(Hash)
+        out = from_hash_with_key(wk,v,out,depth+1)
+      elsif v.is_a?(Array)
+        out = from_array_with_key(wk,v,out,depth+1)
+      else
+        out = from_string_with_key(wk,v,out,key,depth)
+      end
+    end
+    out
+  end
+
+  def parse_state(*m)
+    out = []
+    return [] unless m[0]
+    m.flatten.each do |e|
+      ent = e['entity_id']
+      from_hash_with_key(ent,e,out)
+    end
+    out
+  end
+
+  def parse_result(js_data)
+    out = []
+    *m = js_data['result']
+    return [] unless m[0]
+    m.flatten.each do |e|
+      ent = e['entity_id']
+      from_hash_with_key(ent,e,out)
+    end
+    out
   end
   
   private
@@ -753,6 +1035,13 @@ class Hass < Socket
         len
       end
     payload = read_nonblock(len)
+    loop do 
+      remain = len - payload.length
+      # $l.debug [:payload_needed, len, :payload_got, payload.length, :remaining, remain]
+      break unless remain > 0
+      IO.select([self],nil,nil,10)
+      payload << read_nonblock(remain)
+    end
     return fin, opcode, payload
   end
 
@@ -872,9 +1161,13 @@ module SocketMethods
     {name:name,port:port,pid:pid,delimiter:delimiter}.to_s
   end
   
-  def puts(*msg)
-  $l.debug [self,:writing,msg]
-    msg.each{|m| print("#{prefix}#{m.gsub(postfix,'')}#{postfix}")}
+  def puts_message(*msg)
+    msg = msg.flatten
+    # $l.debug [:writing,msg]
+    msg.each do |m|
+      print("#{prefix}#{"#{m}".gsub(postfix,'')}#{postfix}")
+      sleep(0.01)
+    end
   end
 
   def read_bytes(len)
@@ -890,16 +1183,16 @@ module SocketMethods
       break unless new_data
       buf << new_data
       break if new_data.length < 1024
-      $l.debug buf
+      # $l.debug buf
     end
   end
 
   def next_line
     @buf ||= ''
-    $l.debug buf.inspect
+    # $l.debug buf.inspect
     non_block_read
-    $l.debug buf.inspect
-    $l.debug delimiter.inspect
+    # $l.debug buf.inspect
+    # $l.debug delimiter.inspect
     line = buf.slice!(/^.*#{delimiter}/)
     (line = line.chomp) || line
   end
@@ -923,7 +1216,7 @@ def update_profile(env)
 end
 
 def install(env,port,serv)
-  $l.debug 'Profile was updated. Installing start trigger. Process will restart'
+  $l.debug 'Profile was updated. Process will restart'
   update_profile(env)
   sleep 1
   env.process_ids.each{|p| Process.kill('HUP',p)}
@@ -946,7 +1239,7 @@ class Environment
   attr_reader :profiles_path, :rpm_path, :lock_path, :profile_home, :bp_names, :process_ids
 
   def initialize
-    @profile_name = 'hass_websocket'
+    @profile_name = 'hass_ws'
     if RUBY_PLATFORM.include?('linux')
       @home_path = '/home/RPM/'
       @rpm_path = "#{home_path}GNUstep/Library/ApplicationSupport/RacePointMedia/"
@@ -1011,6 +1304,8 @@ env = Environment.new
 port, protocol = connection_info(env)
 $l.debug "script started with #{protocol} on #{port}"
 install(env,port.to_i,t_server) if protocol == 'udp'
+
+$filter = ['brightness','state']
 
 env.update_pids
 sleep 5
